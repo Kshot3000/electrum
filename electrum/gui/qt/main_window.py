@@ -317,6 +317,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger, QtEventListener):
             self._update_check_thread.checked.connect(on_version_received)
             self._update_check_thread.start()
 
+        self._init_complete = True
+
     def run_coroutine_dialog(self, coro, text):
         """ run coroutine in a waiting dialog, with a Cancel button that cancels the coroutine"""
         from .util import RunCoroutineDialog
@@ -2813,6 +2815,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger, QtEventListener):
 
     def closeEvent(self, event):
         # note that closeEvent is NOT called if the user quits with Ctrl-C
+        if not getattr(self, "_init_complete", False):
+            # __init__ did not run to completion (see #10969), so nothing was
+            # fully set up and no closing warnings were registered. Let the
+            # window close instead of crashing on state that was never created.
+            event.accept()
+            return
         if not self._show_closing_warnings():
             event.ignore()
             return
@@ -2820,6 +2828,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger, QtEventListener):
         event.accept()
 
     def clean_up(self):
+        if not getattr(self, "_init_complete", False):
+            # __init__ did not run to completion (see #10969); there is
+            # nothing to clean up, and the state clean_up() touches may
+            # not have been created yet.
+            return
         if self._cleaned_up:
             return
         self._cleaned_up = True
